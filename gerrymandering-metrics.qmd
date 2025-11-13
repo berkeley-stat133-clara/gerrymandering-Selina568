@@ -3,9 +3,119 @@ title: Gerrymandering Metrics
 format: typst
 ---
 
-### 2024 Election Results and the 2024 District Map
+### 2024 Election Results and the 2024 District Map (Part 4)
 
+```{r}
+library(sf)
+library(tidyverse)
 
+votes_precinct <- read_csv("data/g24_sov_by_g24_svprec_clean.csv")
 
-### 2024 Election Results and the proposed 2025 District Map
+votes_cong <- votes_precinct |>
+    filter(ELECTION == "G24" & !is.na(CDDIST)) |>
+    group_by(CDDIST) |>
+    summarize(DEM = sum(CNGDEM01, na.rm = TRUE), REP = sum(CNGREP01, na.rm = TRUE))
 
+head(votes_cong)
+```
+
+```{r}
+votes_cong <- votes_cong |>
+  mutate(DEM_share = DEM / (DEM + REP))
+
+mean_median_diff <- mean(votes_cong$DEM_share) - median(votes_cong$DEM_share)
+mean_median_diff
+```
+
+```{r}
+wasted_votes <- function(votesA, votesB) {
+    total <- votesA + votesB
+    margin <- abs(votesA - votesB)
+    half <- total / 2
+    ifelse(votesA > votesB, votesA - half, votesA)
+}
+
+votes_cong <- votes_cong |>
+    mutate(wasted_DEM = wasted_votes(DEM, REP),
+           wasted_REP = wasted_votes(REP, DEM))
+
+efficiency_gap <- sum(votes_cong$wasted_REP - votes_cong$wasted_DEM) / sum(votes_cong$DEM + votes_cong$REP)
+efficiency_gap
+```
+
+```{r}
+tibble(Metric = c("Mean–Median Difference", "Efficiency Gap"),
+       Value = c(mean_median_diff, efficiency_gap))
+```
+
+### 2024 Election Results and the proposed 2025 District Map (Part 6)
+
+```{r}
+sr_shp <- st_read("data/shapefiles/srprec_state_g24_v01_shp.shp") |>
+    st_transform(3310) |>
+    st_set_precision(1) |>
+    st_make_valid() |>
+    st_collection_extract("POLYGON")
+
+cd_ab604 <- st_read("data/shapefiles/AB604.shp") |>
+    st_transform(3310)
+
+sr_votes <- read_csv("data/state_g24_sov_data_by_g24_srprec.csv")
+
+sr_data <- left_join(sr_shp, sr_votes, by = c("SRPREC_KEY" = "SRPREC_KEY"))
+```
+
+```{r}
+votes_precinct <- read_csv("data/g24_sov_by_g24_svprec_clean.csv")
+```
+
+```{r}
+votes_cong <- votes_precinct |>
+    filter(ELECTION == "G24" & !is.na(CDDIST)) |>
+    group_by(CDDIST) |>
+    summarize(DEM = sum(CNGDEM01, na.rm = TRUE),
+              REP = sum(CNGREP01, na.rm = TRUE))
+```
+
+```{r}
+sr_data <- sr_data |>
+    mutate(CNGDEM01 = as.numeric(CNGDEM01),
+           CNGREP01 = as.numeric(CNGREP01))
+
+reallocated_DEM <- st_interpolate_aw(sr_data["CNGDEM01"], cd_ab604, extensive = TRUE)
+reallocated_REP <- st_interpolate_aw(sr_data["CNGREP01"], cd_ab604, extensive = TRUE)
+
+cd_ab604$DEM <- reallocated_DEM$CNGDEM01
+cd_ab604$REP <- reallocated_REP$CNGREP01
+```
+
+```{r}
+votes_cong_ab604 <- cd_ab604 |>
+    st_drop_geometry() |>
+    mutate(TOTAL = DEM + REP, DEM_share = DEM / TOTAL) |>
+    filter(TOTAL > 0)
+```
+
+```{r}
+mean_median_diff_ab604 <- mean(votes_cong_ab604$DEM_share, na.rm = TRUE) -
+    median(votes_cong_ab604$DEM_share, na.rm = TRUE)
+
+wasted_votes <- function(votesA, votesB) {
+    total <- votesA + votesB
+    half <- total / 2
+    ifelse(votesA > votesB, votesA - half, votesA)
+}
+
+votes_cong_ab604 <- votes_cong_ab604 |>
+    mutate(wasted_DEM = wasted_votes(DEM, REP),
+           wasted_REP = wasted_votes(REP, DEM))
+
+efficiency_gap_ab604 <- sum(votes_cong_ab604$wasted_REP - votes_cong_ab604$wasted_DEM, na.rm = TRUE) /
+    sum(votes_cong_ab604$DEM + votes_cong_ab604$REP, na.rm = TRUE)
+
+```
+
+```{r}
+tibble(Metric = c("Mean–Median Difference", "Efficiency Gap"),
+       Value = c(mean_median_diff_ab604, efficiency_gap_ab604))
+```
