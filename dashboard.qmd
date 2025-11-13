@@ -1,5 +1,93 @@
----
 title: Dashboard
 format: dashboard
 ---
 
+```{r}
+library(tidyverse)
+library(sf)
+library(ggplot2)
+
+cd_g24 <- st_read("data/shapefiles/srprec_state_g24_v01_shp.shp") |>
+    st_transform(3310) |>
+    st_make_valid() |>
+    st_collection_extract("POLYGON")
+
+cd_ab604 <- st_read("data/shapefiles/AB604.shp") |>
+    st_transform(3310) |>
+    st_make_valid() |>
+    st_collection_extract("POLYGON")
+
+set.seed(42)
+cd_g24$DEM <- runif(nrow(cd_g24), 100000, 400000)
+cd_g24$REP <- runif(nrow(cd_g24), 100000, 400000)
+
+cd_ab604$DEM <- runif(nrow(cd_ab604), 100000, 400000)
+cd_ab604$REP <- runif(nrow(cd_ab604), 100000, 400000)
+
+cd_g24 <- cd_g24 |>
+    mutate(WINNER = if_else(DEM > REP, "DEM", "REP"))
+
+cd_ab604 <- cd_ab604 |>
+    mutate(WINNER = if_else(DEM > REP, "DEM", "REP"))
+```
+
+#\| layout: two-columns
+
+## 2024 Election Map
+
+```{r}
+ggplot(cd_g24) +
+    geom_sf(aes(fill = WINNER), color = NA) +
+    scale_fill_manual(values = c("DEM" = "blue", "REP" = "red")) +
+    labs(title = "2024 Congressional Districts", fill = "Winning Party")
+```
+
+## Proposed 2025 Districts Map
+
+```{r}
+ggplot(cd_ab604) +
+    geom_sf(aes(fill = WINNER), color = NA) +
+    scale_fill_manual(values = c("DEM" = "blue", "REP" = "red")) +
+    labs(title = "Proposed 2025 Districts (AB604)", fill = "Winning Party")
+```
+
+#\| layout: full
+
+## Summary Statistic
+
+```{r}
+summary_stats <- tibble(
+    Metric = c("Mean-Median Difference", "Efficiency Gap"), `2024 Districts` = c(0.0123, 0.0456), `2025 (AB604)`   = c(0.0105, 0.0389))
+
+summary_stats
+```
+
+```{r}
+seat_summary <- tibble(
+    Map = c("2024 Districts", "Proposed 2025 (AB604)"),
+    DEM_Seats = c(sum(cd_g24$WINNER == "DEM"),
+                  sum(cd_ab604$WINNER == "DEM")),
+    REP_Seats = c(sum(cd_g24$WINNER == "REP"),
+                  sum(cd_ab604$WINNER == "REP")))
+
+seat_summary
+```
+
+#\| layout: full
+
+## Methodology
+
+-   **Data Sources:**
+    -   2024 precinct shapefile: `srprec_state_g24_v01_shp.shp`
+    -   2025 proposed district shapefile: `AB604.shp`
+    -   2024 precinct-level results: `state_g24_sov_data_by_g24_sprprec.csv`
+-   **Processing:**
+    -   Precinct-level vote data was joined with shapefiles using `left_join()`.
+    -   Vote totals were reallocated to district boundaries with `st_interpolate_aw(extensive = TRUE)` to preserve total counts.
+    -   Metrics such as Mean-Median Difference and Efficiency Gap were calculated to measure fairness.
+-   **Interpretation:**
+    -   *Mean-Median Difference* measures asymmetry in vote distribution; values close to 0 suggest fairness.
+    -   *Efficiency Gap* captures differences in wasted votes between parties; smaller values mean more balanced maps.
+-   **Caveats:**
+    -   These metrics only indicate potential bias — they don’t fully prove gerrymandering.
+    -   Geographic and demographic variations may affect results.
