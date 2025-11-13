@@ -81,6 +81,7 @@ cd_ab604$REP <- reallocated_REP$REPREG
 
 cd_ab604 <- cd_ab604 |> mutate(TOTAL = DEM + REP, WINNER = if_else(DEM > REP, "DEM", "REP"))
 
+
 head(cd_ab604)
 ```
 
