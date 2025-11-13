@@ -70,6 +70,7 @@ seat_summary <- tibble(
     REP_Seats = c(sum(cd_g24$WINNER == "REP"),
                   sum(cd_ab604$WINNER == "REP")))
 
+
 seat_summary
 ```
 
