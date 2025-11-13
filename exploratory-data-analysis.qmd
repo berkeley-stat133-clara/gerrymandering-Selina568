@@ -3,26 +3,69 @@ title: Exploratory Data Analysis
 format: typst
 ---
 
+```{r}
+library(tidyverse)
+votes_precinct <- read_csv("data/g24_sov_by_g24_svprec.csv")
+```
+
 ### Question 1
 
-Put your question here.
+What is the range and distribution of total votes cast across all precincts?
 
 ### Answer 1
 
-Put your answer here.
+The total votes per precinct ranged from 0 to about 3.8 million, with a median of 91 and a highly skewed distribution where most precincts had relatively small totals.
+
+```{r}
+summary(votes_precinct$TOTVOTE)
+
+ggplot(votes_precinct, aes(x = TOTVOTE)) +
+    geom_histogram(bins = 40, fill = "steelblue") +
+    labs(title = "Distribution of Total Votes per Precinct", x = "Total Votes", y = "Number of Precincts")
+```
 
 ### Question 2
 
-Put your question here.
+Which counties or districts had the highest and lowest average turnout per precinct?
 
 ### Answer 2
 
-Put your answer here.
+Across all counties, County 57 recorded the highest average turnout (around 4,937 votes per precinct), while other counties showed lower averages, reflecting variation in precinct size and voter participation.
+
+```{r}
+votes_precinct |>
+    group_by(COUNTY) |>
+    summarize(mean_turnout = mean(TOTVOTE, na.rm = TRUE)) |>
+    arrange(desc(mean_turnout))|>
+    slice(1)
+
+votes_precinct |>
+    group_by(COUNTY) |>
+    summarize(mean_turnout = mean(TOTVOTE, na.rm = TRUE)) |>
+    ggplot(aes(x = reorder(as.factor(COUNTY), mean_turnout), y = mean_turnout)) +
+    geom_col(fill = "darkorange") +
+    coord_flip() +
+    labs(title = "Average Turnout by County", x = "County", y = "Average Total Votes per Precinct")
+```
 
 ### Question 3
 
-Put your question here.
+Which Proposition had the closest statewide race between "Yes" and "No" Votes?
 
 ### Answer 3
 
-Put your answer here.
+Among all statewide propositions, Proposition 32 had the closest race, with only about 1.4 million votes separating “Yes” and “No” totals, suggesting it was one of the most evenly contested measures.
+
+```{r}
+prop_totals <- votes_precinct |>
+    summarize(across(starts_with("PR_"), ~ sum(as.numeric(.), na.rm = TRUE)))
+
+prop_long <- prop_totals |>
+    pivot_longer(cols = everything(),
+                 names_to = c("Proposition", "Vote"),
+                 names_pattern = "PR_(\\d+)_(.)",
+                 values_to = "Votes") |>
+    pivot_wider(names_from = Vote, values_from = Votes) |> mutate(Difference = abs(Y - N))
+
+arrange(prop_long, Difference)
+```
