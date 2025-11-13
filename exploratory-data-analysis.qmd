@@ -67,5 +67,6 @@ prop_long <- prop_totals |>
                  values_to = "Votes") |>
     pivot_wider(names_from = Vote, values_from = Votes) |> mutate(Difference = abs(Y - N))
 
+
 arrange(prop_long, Difference)
 ```
